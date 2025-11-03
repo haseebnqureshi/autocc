@@ -33,10 +33,15 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.claude/
+.autocc/
 
 # Example files
 *.example.*
 examples/
+
+# Development scripts (dev-only)
+scripts/
 
 # Git files
 .git/

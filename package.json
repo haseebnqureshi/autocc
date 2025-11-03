@@ -29,7 +29,8 @@
 		"devtools"
 	],
 	"bin": {
-		"autocc": "dist/cli.js"
+		"autocc": "dist/cli.js",
+		"autocc-local": "dist/cli.js"
 	},
 	"type": "module",
 	"engines": {
@@ -44,7 +45,8 @@
 		"lint:fix": "eslint src --fix",
 		"typecheck": "tsc --noEmit",
 		"prepublishOnly": "npm run lint && npm run typecheck && npm run build",
-		"prepare": "npm run build"
+		"prepare": "npm run build",
+		"dev:setup": "./scripts/dev-setup.sh"
 	},
 	"files": [
 		"dist"

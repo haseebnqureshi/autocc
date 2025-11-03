@@ -329,20 +329,48 @@ Both arguments must be provided together.
 
 ## Testing Configuration
 
-### Local Development
+### Local Development Setup
 
-Test your local version alongside npm version:
+Run the automated setup script to test local changes alongside the npm version:
 
 ```bash
-# Install npm version
-npm install -g autocc
+npm run dev:setup
+```
 
-# In your autocc project directory
+This script:
+1. Builds your local code
+2. Links both `autocc` and `autocc-local` commands
+3. Unlinks `autocc` to make room for npm version
+4. Installs npm version as `autocc`
+
+**Result:**
+```bash
+autocc        # npm published version (what users experience)
+autocc-local  # your local development version (your changes)
+```
+
+### Manual Setup
+
+If you prefer manual control:
+
+```bash
+# 1. Build and link
+npm run build
 npm link
 
-# Now you have both:
-autocc         # npm published version
-autocc-local   # your local development version
+# 2. Unlink autocc only
+npm unlink -g autocc
+
+# 3. Install npm version
+npm install -g autocc
+
+# Now you have both versions side-by-side
+```
+
+### Testing Published Version Only
+
+```bash
+npx autocc@latest  # Run npm version without installing
 ```
 
 ## 🔗 Related Documentation
