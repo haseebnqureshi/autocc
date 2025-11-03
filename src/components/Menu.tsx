@@ -55,7 +55,13 @@ interface ProjectItem {
 	recentProject: RecentProject;
 }
 
-type MenuItem = CommonItem | WorktreeItem | ProjectItem;
+interface SectionHeaderItem {
+	type: 'section-header';
+	label: string;
+	value: string;
+}
+
+type MenuItem = CommonItem | WorktreeItem | ProjectItem | SectionHeaderItem;
 
 const createSeparatorWithText = (
 	text: string,
@@ -95,7 +101,7 @@ const Menu: React.FC<MenuProps> = ({
 	const [sessions, setSessions] = useState<Session[]>([]);
 	const [items, setItems] = useState<MenuItem[]>([]);
 	const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
-	const limit = 10;
+	const limit = 15; // 1.5x default for better visibility without scroll
 
 	// Get worktree configuration for sorting
 	const worktreeConfig = configurationManager.getWorktreeConfig();
@@ -213,41 +219,160 @@ const Menu: React.FC<MenuProps> = ({
 				})
 			: items;
 
-		// Build menu items with proper alignment
-		const menuItems: MenuItem[] = filteredItems.map(
-			(item, index): WorktreeItem => {
+		// Group worktrees by work type
+		const grouped = {
+			feature: filteredItems.filter(item =>
+				item.worktree.branch?.startsWith('feature-'),
+			),
+			hotfix: filteredItems.filter(item =>
+				item.worktree.branch?.startsWith('hotfix-'),
+			),
+			maintenance: filteredItems.filter(item =>
+				item.worktree.branch?.startsWith('maintenance-'),
+			),
+			lab: filteredItems.filter(item =>
+				item.worktree.branch?.startsWith('lab-'),
+			),
+			other: filteredItems.filter(
+				item =>
+					!item.worktree.branch?.match(
+						/^(feature|hotfix|maintenance|lab)-/,
+					),
+			),
+		};
+
+		// Build menu items with fixed nav first, then sections
+		const menuItems: MenuItem[] = [];
+		let globalIndex = 0; // For number shortcuts
+
+		// FIRST: Add navigation options (fixed nav) when not in search mode
+		if (!isSearchMode) {
+			menuItems.push(
+				{
+					type: 'common',
+					label: `N ${MENU_ICONS.NEW_WORKTREE} New Worktree`,
+					value: 'new-worktree',
+				},
+				{
+					type: 'common',
+					label: `M ${MENU_ICONS.MERGE_WORKTREE} Merge Worktree`,
+					value: 'merge-worktree',
+				},
+				{
+					type: 'common',
+					label: `D ${MENU_ICONS.DELETE_WORKTREE} Delete Worktree`,
+					value: 'delete-worktree',
+				},
+				{
+					type: 'common',
+					label: `C ${MENU_ICONS.CONFIGURE_SHORTCUTS} Configuration`,
+					value: 'configuration',
+				},
+			);
+
+			if (projectName) {
+				// In multi-project mode, show 'Back to project list'
+				menuItems.push({
+					type: 'common',
+					label: `B 🔙 Back to project list`,
+					value: 'back-to-projects',
+				});
+			} else {
+				// In single-project mode, show 'Exit'
+				menuItems.push({
+					type: 'common',
+					label: `Q ${MENU_ICONS.EXIT} Exit`,
+					value: 'exit',
+				});
+			}
+
+			// Add separator after navigation
+			if (filteredItems.length > 0) {
+				menuItems.push({
+					type: 'section-header',
+					label: '─'.repeat(50),
+					value: 'nav-separator',
+				});
+			}
+		}
+
+		// Helper to add section with items
+		const addSection = (title: string, sectionItems: typeof filteredItems) => {
+			if (sectionItems.length === 0) return;
+
+			// Add section header
+			menuItems.push({
+				type: 'section-header',
+				label: title,
+				value: `section-${title}`,
+			});
+
+			// Add items in this section
+			sectionItems.forEach(item => {
 				const label = assembleWorktreeLabel(item, columnPositions);
+				const numberPrefix =
+					!isSearchMode && globalIndex < 10 ? `${globalIndex} ❯ ` : '❯ ';
+				globalIndex++;
 
-				// Only show numbers for worktrees (0-9) when not in search mode
-				const numberPrefix = !isSearchMode && index < 10 ? `${index} ❯ ` : '❯ ';
-
-				return {
+				menuItems.push({
 					type: 'worktree',
 					label: numberPrefix + label,
 					value: item.worktree.path,
 					worktree: item.worktree,
-				};
-			},
-		);
+				});
+			});
+		};
 
-		// Filter recent projects based on search query
-		const filteredRecentProjects = searchQuery
-			? recentProjects.filter(project =>
-					project.name.toLowerCase().includes(searchQuery.toLowerCase()),
-				)
-			: recentProjects;
-
-		// Add menu options only when not in search mode
+		// SECOND: Add sectioned worktrees (only if not in search mode)
 		if (!isSearchMode) {
-			// Add recent projects section if enabled and has recent projects
-			if (multiProject && filteredRecentProjects.length > 0) {
+			addSection('Features', grouped.feature);
+			addSection('Hotfixes', grouped.hotfix);
+			addSection('Maintenance', grouped.maintenance);
+			addSection('Lab', grouped.lab);
+			if (grouped.other.length > 0) {
+				addSection('Other', grouped.other);
+			}
+
+			// Add "All" section separator if we have worktrees
+			const totalWorktrees = filteredItems.length;
+			if (totalWorktrees > 0) {
+				menuItems.push({
+					type: 'section-header',
+					label: 'All Worktrees',
+					value: 'section-all',
+				});
+			}
+		}
+
+		// THIRD: Add all worktrees in "All" section or when searching
+		filteredItems.forEach((item, index) => {
+			const label = assembleWorktreeLabel(item, columnPositions);
+			const numberPrefix =
+				!isSearchMode && index < 10 ? `${index} ❯ ` : '❯ ';
+
+			menuItems.push({
+				type: 'worktree',
+				label: numberPrefix + label,
+				value: item.worktree.path,
+				worktree: item.worktree,
+			});
+		});
+
+		// FOURTH: Add recent projects section if in multi-project mode
+		if (!isSearchMode && multiProject) {
+			const filteredRecentProjects = searchQuery
+				? recentProjects.filter(project =>
+						project.name.toLowerCase().includes(searchQuery.toLowerCase()),
+					)
+				: recentProjects;
+
+			if (filteredRecentProjects.length > 0) {
 				menuItems.push({
 					type: 'common',
 					label: createSeparatorWithText('Recent'),
 					value: 'recent-separator',
 				});
 
-				// Add recent projects
 				// Calculate available number shortcuts for recent projects
 				const worktreeCount = filteredItems.length;
 				const availableNumbersForProjects = worktreeCount < 10;
@@ -279,51 +404,6 @@ const Menu: React.FC<MenuProps> = ({
 						value: `recent-project-${index}`,
 						recentProject: project,
 					});
-				});
-			}
-
-			// Add menu options
-			const otherMenuItems: MenuItem[] = [
-				{
-					type: 'common',
-					label: createSeparatorWithText('Other'),
-					value: 'other-separator',
-				},
-				{
-					type: 'common',
-					label: `N ${MENU_ICONS.NEW_WORKTREE} New Worktree`,
-					value: 'new-worktree',
-				},
-				{
-					type: 'common',
-					label: `M ${MENU_ICONS.MERGE_WORKTREE} Merge Worktree`,
-					value: 'merge-worktree',
-				},
-				{
-					type: 'common',
-					label: `D ${MENU_ICONS.DELETE_WORKTREE} Delete Worktree`,
-					value: 'delete-worktree',
-				},
-				{
-					type: 'common',
-					label: `C ${MENU_ICONS.CONFIGURE_SHORTCUTS} Configuration`,
-					value: 'configuration',
-				},
-			];
-			menuItems.push(...otherMenuItems);
-			if (projectName) {
-				// In multi-project mode, show 'Back to project list'
-				menuItems.push({
-					type: 'common',
-					label: `B 🔙 Back to project list`,
-					value: 'back-to-projects',
-				});
-			} else {
-				// In single-project mode, show 'Exit'
-				menuItems.push({
-					type: 'common',
-					label: `Q ${MENU_ICONS.EXIT} Exit`,
-					value: 'exit',
 				});
 			}
 		}
@@ -456,8 +536,12 @@ const Menu: React.FC<MenuProps> = ({
 	});
 
 	const handleSelect = (item: MenuItem) => {
-		if (item.value.endsWith('-separator') || item.value === 'recent-header') {
-			// Do nothing for separators and headers
+		if (
+			item.value.endsWith('-separator') ||
+			item.value === 'recent-header' ||
+			item.type === 'section-header'
+		) {
+			// Do nothing for separators and section headers
 		} else if (item.type === 'project') {
 			// Handle recent project selection
 			if (onSelectRecentProject) {
@@ -525,11 +609,11 @@ const Menu: React.FC<MenuProps> = ({
 	return (
 		<Box flexDirection="column">
 			<Box marginBottom={1} flexDirection="column">
-				<Text bold color="green">
-					CCManager - Claude Code Worktree Manager
+				<Text bold color="rgb(232, 123, 53)">
+					autocc - Claude Code Worktree Manager (fork of ccmanager)
 				</Text>
 				{projectName && (
-					<Text bold color="green">
+					<Text bold color="rgb(232, 123, 53)">
 						{projectName}
 					</Text>
 				)}
@@ -577,6 +661,22 @@ const Menu: React.FC<MenuProps> = ({
 					isFocused={!error}
 					initialIndex={selectedIndex}
 					limit={limit}
+					itemComponent={({isSelected, label}) => {
+						const item = items.find(i => i.label === label);
+						const isSectionHeader = item?.type === 'section-header';
+
+						if (isSectionHeader) {
+							return (
+								<Text bold color="rgb(232, 123, 53)">
+									{label}
+								</Text>
+							);
+						}
+
+						return (
+							<Text color={isSelected ? 'green' : undefined}>{label}</Text>
+						);
+					}}
 				/>
 			)}
 

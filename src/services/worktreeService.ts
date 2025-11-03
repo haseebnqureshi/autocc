@@ -1,5 +1,5 @@
 import {execSync} from 'child_process';
-import {existsSync, statSync, cpSync} from 'fs';
+import {existsSync, statSync, cpSync, readFileSync, writeFileSync} from 'fs';
 import path from 'path';
 import {Effect, Either} from 'effect';
 import {
@@ -98,10 +98,10 @@ export class WorktreeService {
 	 *
 	 * Handles multiple remotes and throws AmbiguousBranchError when disambiguation is needed.
 	 *
-	 * Priority order:
-	 * 1. Local branch exists -> return as-is
-	 * 2. Single remote branch -> return remote/branch
-	 * 3. Multiple remote branches -> throw AmbiguousBranchError
+	 * Priority order (REMOTE FIRST to avoid checked-out branch issues):
+	 * 1. Single remote branch -> return remote/branch (e.g., origin/develop)
+	 * 2. Multiple remote branches -> throw AmbiguousBranchError
+	 * 3. Local branch exists -> return as-is
 	 * 4. No branches found -> return original (let git handle error)
 	 *
 	 * @private
@@ -110,21 +110,12 @@ export class WorktreeService {
 	 * @throws {AmbiguousBranchError} When branch exists in multiple remotes
 	 */
 	private resolveBranchReference(branchName: string): string {
+		const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+		if (verbose) console.error(`\n[DEBUG] resolveBranchReference: ${branchName}`);
 		try {
-			// First check if local branch exists (highest priority)
-			try {
-				execSync(`git show-ref --verify --quiet refs/heads/${branchName}`, {
-					cwd: this.rootPath,
-					encoding: 'utf8',
-				});
-				// Local branch exists, use it as-is
-				return branchName;
-			} catch {
-				// Local branch doesn't exist, check remotes
-			}
-
-			// Get all remotes
+			// Get all remotes and check for remote branches FIRST
 			const remotes = this.getAllRemotes();
+			if (verbose) console.error(`  Found remotes: ${remotes.join(', ')}`);
 			const remoteBranchMatches: RemoteBranchMatch[] = [];
 
 			// Check each remote for the branch
@@ -148,17 +139,36 @@ export class WorktreeService {
 				}
 			}
 
-			// Handle results based on number of matches
-			if (remoteBranchMatches.length === 0) {
-				// No remote branches found, return original (let git handle the error)
-				return branchName;
-			} else if (remoteBranchMatches.length === 1) {
-				// Single remote branch found, use it
+			// Handle remote branch results
+			if (verbose) console.error(`  Remote matches found: ${remoteBranchMatches.length}`);
+			if (remoteBranchMatches.length === 1) {
+				// Single remote branch found, use it (highest priority)
+				if (verbose) console.error(`  → Using remote: ${remoteBranchMatches[0]!.fullRef}\n`);
 				return remoteBranchMatches[0]!.fullRef;
-			} else {
+			} else if (remoteBranchMatches.length > 1) {
 				// Multiple remote branches found, throw ambiguous error
+				if (verbose) console.error(`  → Multiple remotes found, throwing ambiguous error\n`);
 				throw new AmbiguousBranchError(branchName, remoteBranchMatches);
 			}
+
+			// No remote branches found, fall back to checking local branch
+			if (verbose) console.error(`  Checking for local branch...`);
+			try {
+				execSync(`git show-ref --verify --quiet refs/heads/${branchName}`, {
+					cwd: this.rootPath,
+					encoding: 'utf8',
+				});
+				// Local branch exists, use it as fallback
+				if (verbose) console.error(`  → Using local: ${branchName}\n`);
+				return branchName;
+			} catch {
+				// Local branch doesn't exist either
+				if (verbose) console.error(`  Local branch not found`);
+			}
+
+			// No branches found at all, return original (let git handle the error)
+			if (verbose) console.error(`  → No branches found, returning original: ${branchName}\n`);
+			return branchName;
 		} catch (error) {
 			// Re-throw AmbiguousBranchError as-is
 			if (error instanceof AmbiguousBranchError) {
@@ -837,6 +847,8 @@ export class WorktreeService {
 		baseBranch: string,
 		copySessionData = false,
 		copyClaudeDirectory = false,
+		_workType?: import('../types/index.js').WorkType,
+		_description?: string,
 	): Effect.Effect<Worktree, GitError | FileSystemError, never> {
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const self = this;
@@ -858,13 +870,14 @@ export class WorktreeService {
 				? worktreePath
 				: path.join(absoluteGitRoot, worktreePath);
 
-			// Check if branch exists
+			// Check if branch exists (suppress stderr to avoid "fatal: Needed a single revision" message)
 			const branchExists = yield* Effect.catchAll(
 				Effect.try({
 					try: () => {
-						execSync(`git rev-parse --verify ${branch}`, {
+						execSync(`git rev-parse --verify ${branch} 2>/dev/null`, {
 							cwd: self.rootPath,
 							encoding: 'utf8',
+							stdio: ['pipe', 'pipe', 'ignore'], // Ignore stderr
 						});
 						return true;
 					},
@@ -874,13 +887,25 @@ export class WorktreeService {
 			);
 
 			// Create the worktree command
+			const verbose = process.env["AUTOCC_VERBOSE"] === '1';
 			let command: string;
 			if (branchExists) {
 				command = `git worktree add "${resolvedPath}" "${branch}"`;
 			} else {
 				// Resolve the base branch to its proper git reference
 				const resolvedBaseBranch = self.resolveBranchReference(baseBranch);
+				if (verbose) {
+					console.error('\n[DEBUG] Worktree Creation:');
+					console.error(`  Base branch input: ${baseBranch}`);
+					console.error(`  Resolved to: ${resolvedBaseBranch}`);
+					console.error(`  New branch: ${branch}`);
+					console.error(`  Target path: ${resolvedPath}`);
+				}
 				command = `git worktree add -b "${branch}" "${resolvedPath}" "${resolvedBaseBranch}"`;
+				if (verbose) {
+					console.error(`  Git command: ${command}`);
+					console.error(`  Working directory: ${absoluteGitRoot}\n`);
+				}
 			}
 
 			// Execute the worktree creation command
@@ -973,6 +998,272 @@ export class WorktreeService {
 				isMainWorktree: false,
 				hasSession: false,
 			};
+		});
+	}
+
+	/**
+	 * Setup worktree with Claude Code in headless mode
+	 * Determines proper branch name and creates environment symlinks
+	 *
+	 * @param {string} worktreePath - Path to the worktree
+	 * @param {string} currentBranchName - Current temporary branch name
+	 * @param {import('../types/index.js').WorkType} workType - Type of work (feature, hotfix, lab)
+	 * @param {string} description - Description of what the user wants to do
+	 * @param {import('./sessionManager.js').SessionManager} sessionManager - Session manager instance for headless mode
+	 * @returns {Effect.Effect<string, GitError | import('../types/errors.js').ProcessError | import('../types/errors.js').ConfigError, never>} Effect that returns the new branch name or fails with errors
+	 *
+	 * @example
+	 * ```typescript
+	 * const result = await Effect.runPromise(
+	 *   Effect.match(
+	 *     worktreeService.setupWorktreeWithClaudeEffect(
+	 *       '/path/to/worktree',
+	 *       'temp-123456',
+	 *       'feature',
+	 *       'add video storage checks',
+	 *       sessionManager
+	 *     ),
+	 *     {
+	 *       onFailure: (error) => ({ type: 'error', message: error.message }),
+	 *       onSuccess: (branchName) => ({ type: 'success', data: branchName })
+	 *     }
+	 *   )
+	 * );
+	 * ```
+	 */
+	setupWorktreeWithClaudeEffect(
+		worktreePath: string,
+		currentBranchName: string,
+		workType: import('../types/index.js').WorkType,
+		description: string,
+		sessionManager: import('./sessionManager.js').SessionManager,
+	): Effect.Effect<
+		string,
+		| GitError
+		| import('../types/errors.js').ProcessError
+		| import('../types/errors.js').ConfigError,
+		never
+	> {
+		return Effect.gen(function* () {
+			// Build the prompt for Claude - ONLY ask for branch name, we'll execute commands ourselves
+			const prompt = `You are a git branch naming assistant. The user is starting ${workType} work to: ${description}
+
+Suggest an appropriate git branch name following these rules:
+- Prefix with work type: ${workType}-
+- Maximum 3 hyphenated words after prefix
+- Only lowercase letters, numbers, and hyphens
+- Be concise and descriptive
+
+Examples:
+- feature-video-storage-checks
+- hotfix-auth-token-expire
+- maintenance-refactor-api-layer
+- lab-test-new-framework
+
+CRITICAL: Respond ONLY with valid JSON, no explanations, no markdown, no additional text.
+
+Response format:
+{"branchName":"${workType}-word1-word2-word3"}
+
+Example:
+{"branchName":"maintenance-collab-engine-refactor"}`;
+
+			// Run Claude in headless mode
+			const output = yield* sessionManager.runHeadlessModeEffect(
+				worktreePath,
+				prompt,
+			);
+
+			const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+			if (verbose) {
+				console.error('\n[DEBUG] Claude output received:');
+				console.error(output.substring(0, 500));
+				console.error('...\n');
+			}
+
+			// Parse the JSON output to extract the branch name
+			let newBranchName: string;
+			try {
+				// Strip markdown code fences if present
+				let cleanedOutput = output.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+
+				// Extract JSON from output (might have surrounding text)
+				const jsonMatch = cleanedOutput.match(/\{[^}]*"branchName"[^}]*\}/);
+				if (!jsonMatch) {
+					return yield* Effect.fail(
+						new GitError({
+							command: 'claude -p (parse JSON)',
+							exitCode: 1,
+							stderr: 'Could not find JSON in Claude output',
+							stdout: output.substring(0, 500),
+						}),
+					);
+				}
+
+				const result = JSON.parse(jsonMatch[0]) as {branchName?: string};
+				if (!result.branchName || typeof result.branchName !== 'string') {
+					return yield* Effect.fail(
+						new GitError({
+							command: 'claude -p (parse branchName)',
+							exitCode: 1,
+							stderr: 'Invalid branchName in JSON response',
+							stdout: jsonMatch[0],
+						}),
+					);
+				}
+
+				newBranchName = result.branchName;
+				if (verbose) {
+					console.error(`[DEBUG] Extracted branch name: ${newBranchName}\n`);
+				}
+			} catch (error) {
+				return yield* Effect.fail(
+					new GitError({
+						command: 'claude -p (parse error)',
+						exitCode: 1,
+						stderr: `JSON parse error: ${error}`,
+						stdout: output.substring(0, 500),
+					}),
+				);
+			}
+
+			// Validate branch name format
+			const validBranchRegex =
+				/^(feature|hotfix|maintenance|lab)-[a-z0-9]+-[a-z0-9]+(-[a-z0-9]+)?$/;
+			if (!validBranchRegex.test(newBranchName)) {
+				return yield* Effect.fail(
+					new GitError({
+						command: 'validate branch name',
+						exitCode: 1,
+						stderr: `Invalid branch name format: ${newBranchName}. Expected format: ${workType}-word1-word2[-word3]`,
+					}),
+				);
+			}
+
+			// Check if branch name already exists and make it unique if needed
+			let finalBranchName = newBranchName;
+			let counter = 2;
+			while (true) {
+				try {
+					execSync(`git show-ref --verify --quiet refs/heads/${finalBranchName}`, {
+						cwd: worktreePath,
+						encoding: 'utf8',
+					});
+					// Branch exists, try next number
+					finalBranchName = `${newBranchName}-${counter}`;
+					counter++;
+					if (counter > 100) {
+						// Safety check to prevent infinite loop
+						return yield* Effect.fail(
+							new GitError({
+								command: 'generate unique branch name',
+								exitCode: 1,
+								stderr: `Could not generate unique branch name after 100 attempts`,
+							}),
+						);
+					}
+				} catch {
+					// Branch doesn't exist, we can use this name
+					break;
+				}
+			}
+
+			if (verbose && finalBranchName !== newBranchName) {
+				console.error(`[DEBUG] Branch name already existed, using: ${finalBranchName}`);
+			}
+
+			// Now WE rename the branch (Claude only suggested the name)
+			yield* Effect.try({
+				try: () => {
+					if (verbose) {
+						console.error(`[DEBUG] Renaming branch: ${currentBranchName} → ${finalBranchName}`);
+					}
+					execSync(`git branch -m ${currentBranchName} ${finalBranchName}`, {
+						cwd: worktreePath,
+						encoding: 'utf8',
+					});
+				},
+				catch: (error: unknown) => {
+					return new GitError({
+						command: `git branch -m ${currentBranchName} ${finalBranchName}`,
+						exitCode: 1,
+						stderr: `Failed to rename branch: ${String(error)}`,
+					});
+				},
+			});
+
+			// Verify the branch was actually renamed
+			const verifyBranch = yield* Effect.try({
+				try: () => {
+					const currentBranch = execSync('git branch --show-current', {
+						cwd: worktreePath,
+						encoding: 'utf8',
+					}).trim();
+					return currentBranch;
+				},
+				catch: (error: unknown) => {
+					return new GitError({
+						command: 'git branch --show-current',
+						exitCode: 1,
+						stderr: `Failed to verify branch rename: ${String(error)}`,
+					});
+				},
+			});
+
+			if (verifyBranch !== finalBranchName) {
+				return yield* Effect.fail(
+					new GitError({
+						command: 'verify branch rename',
+						exitCode: 1,
+						stderr: `Branch rename verification failed. Expected: ${finalBranchName}, Got: ${verifyBranch}`,
+					}),
+				);
+			}
+
+			if (verbose) {
+				console.error(`[DEBUG] Branch successfully renamed to: ${finalBranchName}\n`);
+			}
+
+			// Create/update claude.md with minimal work context
+			yield* Effect.catchAll(
+				Effect.sync(() => {
+					const claudeMdPath = path.join(worktreePath, 'claude.md');
+
+					// Check if claude.md already exists
+					let existingContent = '';
+					if (existsSync(claudeMdPath)) {
+						existingContent = readFileSync(claudeMdPath, 'utf8');
+					}
+
+					// Prepend minimal work context - just one line to not interfere
+					const workContext = `> Worktree for **${workType}** work: ${description}\n\n`;
+
+					const newContent = existingContent
+						? workContext + existingContent
+						: workContext;
+
+					writeFileSync(claudeMdPath, newContent, 'utf8');
+
+					if (verbose) {
+						console.error(`[DEBUG] Prepended work context to claude.md\n`);
+					}
+				}),
+				(error: unknown) => {
+					// Non-critical error - just log it and continue
+					if (verbose) {
+						console.error(`[DEBUG] Warning: Failed to update claude.md: ${error}\n`);
+					}
+					return Effect.void;
+				},
+			);
+
+			// Mark worktree as newly created (for UI badge)
+			yield* Effect.sync(() => {
+				const newMarkerPath = path.join(worktreePath, '.autocc-new');
+				writeFileSync(newMarkerPath, Date.now().toString(), 'utf8');
+			});
+
+			return finalBranchName;
 		});
 	}
 

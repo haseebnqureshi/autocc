@@ -36,7 +36,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
 	const [items, setItems] = useState<MenuItem[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [loadError, setLoadError] = useState<string | null>(null);
-	const limit = 10;
+	const limit = 15; // 1.5x default for better visibility without scroll
 
 	// Helper function to format error messages based on error type using _tag discrimination
 	const formatErrorMessage = (error: AppError): string => {
@@ -296,8 +296,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
 	return (
 		<Box flexDirection="column">
 			<Box marginBottom={1}>
-				<Text bold color="green">
-					CCManager - Multi-Project Mode
+				<Text bold color="rgb(232, 123, 53)">
+					autocc - Multi-Project Mode (fork of ccmanager)
 				</Text>
 			</Box>
 

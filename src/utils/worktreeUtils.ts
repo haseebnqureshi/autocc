@@ -1,5 +1,6 @@
 import path from 'path';
 import {execSync} from 'child_process';
+import {existsSync, readFileSync, unlinkSync} from 'fs';
 import stripAnsi from 'strip-ansi';
 import {Worktree, Session} from '../types/index.js';
 import {getStatusDisplay} from '../constants/statusIcons.js';
@@ -123,7 +124,27 @@ export function prepareWorktreeItems(
 			: 'detached';
 		const branchName = truncateString(fullBranchName, MAX_BRANCH_NAME_LENGTH);
 		const isMain = wt.isMainWorktree ? ' (main)' : '';
-		const baseLabel = `${branchName}${isMain}${status}`;
+
+		// Check if worktree is newly created (within last 5 minutes)
+		let newBadge = '';
+		try {
+			const newMarkerPath = path.join(wt.path, '.autocc-new');
+			if (existsSync(newMarkerPath)) {
+				const timestamp = parseInt(readFileSync(newMarkerPath, 'utf8'));
+				const age = Date.now() - timestamp;
+				const fiveMinutes = 5 * 60 * 1000;
+				if (age < fiveMinutes) {
+					newBadge = ' \x1b[34m[new]\x1b[0m'; // Blue [new] badge
+				} else {
+					// Remove stale marker
+					unlinkSync(newMarkerPath);
+				}
+			}
+		} catch {
+			// Ignore errors checking for new marker
+		}
+
+		const baseLabel = `${branchName}${isMain}${status}${newBadge}`;
 
 		let fileChanges = '';
 		let aheadBehind = '';

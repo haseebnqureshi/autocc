@@ -267,7 +267,7 @@ describe('NewWorktree component Effect integration', () => {
 
 		const output = lastFrame();
 
-		// Should show the component (base-branch step) even with empty branch list
+		// Should show the component (progressive form) even with empty branch list
 		// The component will display just the default branch
 		expect(output).toContain('Create New Worktree');
 		expect(output).toContain('Select base branch');
@@ -313,7 +313,7 @@ describe('NewWorktree component Effect integration', () => {
 
 		const output = lastFrame();
 
-		// Should display the base-branch selection step with branches
+		// Should display the progressive form with branches
 		expect(output).toContain('Create New Worktree');
 		expect(output).toContain('Select base branch');
 		expect(output).toContain('main (default)');

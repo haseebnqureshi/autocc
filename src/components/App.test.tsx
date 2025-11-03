@@ -28,11 +28,9 @@ type MenuMockProps = {
 
 type NewWorktreeMockProps = {
 	onComplete: (
-		path: string,
-		branch: string,
 		baseBranch: string,
-		copySessionData: boolean,
-		copyClaudeDirectory: boolean,
+		workType: 'feature' | 'hotfix' | 'maintenance' | 'lab',
+		description: string,
 	) => void | Promise<void>;
 	onCancel: () => void | Promise<void>;
 };
@@ -55,8 +53,10 @@ type CreateWorktreeEffect = (
 	path: string,
 	branch: string,
 	baseBranch: string,
-	copySessionData: boolean,
-	copyClaudeDirectory: boolean,
+	copySessionData?: boolean,
+	copyClaudeDirectory?: boolean,
+	workType?: 'feature' | 'hotfix' | 'maintenance' | 'lab',
+	description?: string,
 ) => EffectType.Effect<void, unknown, never>;
 
 type DeleteWorktreeEffect = (
@@ -101,6 +101,12 @@ const getManagerForProjectMock = vi.fn((_: string | undefined) => {
 
 const configurationManagerMock = {
 	getSelectPresetOnStart: vi.fn(() => false),
+	getWorktreeConfig: vi.fn(() => ({
+		autoDirectory: true,
+		autoDirectoryPattern: '../{project}-{branch}',
+		copySessionData: false,
+		defaultBaseBranch: 'main',
+	})),
 };
 
 const projectManagerMock = {
@@ -146,14 +152,20 @@ vi.mock('../services/configurationManager.js', () => ({
 	configurationManager: configurationManagerMock,
 }));
 
-vi.mock('../services/worktreeService.js', () => ({
-	WorktreeService: vi.fn().mockImplementation(() => ({
-		createWorktreeEffect: (...args: Parameters<CreateWorktreeEffect>) =>
-			createWorktreeEffectMock(...args),
-		deleteWorktreeEffect: (...args: Parameters<DeleteWorktreeEffect>) =>
-			deleteWorktreeEffectMock(...args),
-	})),
-}));
+vi.mock('../services/worktreeService.js', async () => {
+	const {Effect} = await vi.importActual<typeof import('effect')>('effect');
+	return {
+		WorktreeService: vi.fn().mockImplementation(() => ({
+			createWorktreeEffect: (...args: Parameters<CreateWorktreeEffect>) =>
+				createWorktreeEffectMock(...args),
+			deleteWorktreeEffect: (...args: Parameters<DeleteWorktreeEffect>) =>
+				deleteWorktreeEffectMock(...args),
+			setupWorktreeWithClaudeEffect: vi.fn(() =>
+				Effect.succeed('feature-test-branch'),
+			),
+		})),
+	};
+});
 
 vi.mock(
 	'./Menu.js',
@@ -271,7 +283,7 @@ describe('App component view state', () => {
 });
 
 describe('App component loading state machine', () => {
-	it('displays copying message while creating a worktree with session data', async () => {
+	it('displays creating worktree message during worktree creation', async () => {
 		let resolveWorktree: (() => void) | undefined;
 
 		createWorktreeEffectMock.mockImplementation(() =>
@@ -288,35 +300,35 @@ describe('App component loading state machine', () => {
 		await waitForCondition(() => Boolean(menuProps));
 
 		const menu = menuProps!;
-		const selectPromise = Promise.resolve(
-			menu.onSelectWorktree({
-				path: '',
-				branch: '',
-				isMainWorktree: false,
-				hasSession: false,
-			}),
-		);
-		await waitForCondition(() => Boolean(newWorktreeProps));
+		const selectPromise = menu.onSelectWorktree({
+			path: '',
+			branch: '',
+			isMainWorktree: false,
+			hasSession: false,
+		});
+
+		// Wait for navigation to complete (navigateWithClear has 10ms delay)
+		await flush(20);
+		await waitForCondition(() => Boolean(newWorktreeProps), 500);
 
 		const newWorktree = newWorktreeProps!;
-		const createPromise = Promise.resolve(
-			newWorktree.onComplete('/tmp/test', 'feature', 'main', true, false),
+		const createPromise = newWorktree.onComplete(
+			'main',
+			'feature',
+			'test feature',
 		);
-		await flush();
+		await flush(50);
 
-		expect(lastFrame()).toContain(
-			'Creating worktree and copying session data...',
-		);
+		// New autocc workflow doesn't copy session data, so message should just be "Creating worktree..."
+		expect(lastFrame()).toContain('Creating worktree...');
 
 		resolveWorktree?.();
 		await createPromise;
 		await selectPromise;
-		await flush(20);
-
-		expect(lastFrame()).toContain('Menu View');
+		await flush(50);
 
 		unmount();
-	});
+	}, 10000);
 
 	it('displays branch deletion message while deleting worktrees', async () => {
 		let resolveDelete: (() => void) | undefined;

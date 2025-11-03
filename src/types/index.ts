@@ -6,6 +6,8 @@ export type Terminal = InstanceType<typeof pkg.Terminal>;
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input';
 
+export type WorkType = 'feature' | 'hotfix' | 'maintenance' | 'lab';
+
 export type StateDetectionStrategy =
 	| 'claude'
 	| 'gemini'
@@ -91,6 +93,7 @@ export interface WorktreeConfig {
 	autoDirectoryPattern?: string; // Optional pattern for directory generation
 	copySessionData?: boolean; // Whether to copy Claude session data by default
 	sortByLastSession?: boolean; // Whether to sort worktrees by last opened session
+	defaultBaseBranch?: string; // Default base branch for new worktrees
 }
 
 export interface CommandConfig {
@@ -211,6 +214,8 @@ export interface IWorktreeService {
 		baseBranch: string,
 		copySessionData?: boolean,
 		copyClaudeDirectory?: boolean,
+		workType?: WorkType,
+		description?: string,
 	): import('effect').Effect.Effect<
 		Worktree,
 		| import('../types/errors.js').GitError

@@ -82,6 +82,7 @@ export class ConfigurationManager {
 				autoDirectory: false,
 				copySessionData: true,
 				sortByLastSession: false,
+				defaultBaseBranch: 'main',
 			};
 		}
 		if (
@@ -99,6 +100,14 @@ export class ConfigurationManager {
 			)
 		) {
 			this.config.worktree.sortByLastSession = false;
+		}
+		if (
+			!Object.prototype.hasOwnProperty.call(
+				this.config.worktree,
+				'defaultBaseBranch',
+			)
+		) {
+			this.config.worktree.defaultBaseBranch = 'main';
 		}
 		if (!this.config.command) {
 			this.config.command = {
@@ -614,6 +623,7 @@ export class ConfigurationManager {
 				autoDirectory: false,
 				copySessionData: true,
 				sortByLastSession: false,
+				defaultBaseBranch: 'main',
 			};
 		}
 		if (
@@ -628,6 +638,14 @@ export class ConfigurationManager {
 			)
 		) {
 			config.worktree.sortByLastSession = false;
+		}
+		if (
+			!Object.prototype.hasOwnProperty.call(
+				config.worktree,
+				'defaultBaseBranch',
+			)
+		) {
+			config.worktree.defaultBaseBranch = 'main';
 		}
 		if (!config.command) {
 			config.command = {

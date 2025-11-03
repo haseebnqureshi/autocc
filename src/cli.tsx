@@ -9,23 +9,29 @@ import {globalSessionOrchestrator} from './services/globalSessionOrchestrator.js
 const cli = meow(
 	`
 	Usage
-	  $ ccmanager
+	  $ autocc
 
 	Options
 	  --help                Show help
 	  --version             Show version
+	  --verbose             Enable verbose debug logging
 	  --multi-project       Enable multi-project mode
 	  --devc-up-command     Command to start devcontainer
 	  --devc-exec-command   Command to execute in devcontainer
 
 	Examples
-	  $ ccmanager
-	  $ ccmanager --multi-project
-	  $ ccmanager --devc-up-command "devcontainer up --workspace-folder ." --devc-exec-command "devcontainer exec --workspace-folder ."
+	  $ autocc
+	  $ autocc --verbose
+	  $ autocc --multi-project
+	  $ autocc --devc-up-command "devcontainer up --workspace-folder ." --devc-exec-command "devcontainer exec --workspace-folder ."
 `,
 	{
 		importMeta: import.meta,
 		flags: {
+			verbose: {
+				type: 'boolean',
+				default: false,
+			},
 			multiProject: {
 				type: 'boolean',
 				default: false,
@@ -50,10 +56,13 @@ if (!!cli.flags.devcUpCommand !== !!cli.flags.devcExecCommand) {
 
 // Check if we're in a TTY environment
 if (!process.stdin.isTTY || !process.stdout.isTTY) {
-	console.error(
-		'Error: ccmanager must be run in an interactive terminal (TTY)',
-	);
+	console.error('Error: autocc must be run in an interactive terminal (TTY)');
 	process.exit(1);
+}
+
+// Set verbose flag globally
+if (cli.flags.verbose) {
+	process.env["AUTOCC_VERBOSE"] = '1';
 }
 
 // Check for CCMANAGER_MULTI_PROJECT_ROOT when using --multi-project
@@ -65,6 +74,10 @@ if (cli.flags.multiProject && !process.env['CCMANAGER_MULTI_PROJECT_ROOT']) {
 		'Please set it to the root directory containing your projects, e.g.:',
 	);
 	console.error('  export CCMANAGER_MULTI_PROJECT_ROOT=/path/to/projects');
+	console.error('');
+	console.error(
+		'Note: autocc is a fork of ccmanager and uses the same environment variable names for compatibility.',
+	);
 	process.exit(1);
 }
 

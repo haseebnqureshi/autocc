@@ -317,8 +317,9 @@ describe('Menu component rendering', () => {
 
 		// Count occurrences of the title
 		const titleCount = (
-			firstRenderOutput?.match(/CCManager - Claude Code Worktree Manager/g) ||
-			[]
+			firstRenderOutput?.match(
+				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+			) || []
 		).length;
 		expect(titleCount).toBe(1);
 
@@ -338,8 +339,9 @@ describe('Menu component rendering', () => {
 
 		const secondRenderOutput = lastFrame2();
 		const titleCount2 = (
-			secondRenderOutput?.match(/CCManager - Claude Code Worktree Manager/g) ||
-			[]
+			secondRenderOutput?.match(
+				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+			) || []
 		).length;
 		expect(titleCount2).toBe(1);
 	});
@@ -361,7 +363,9 @@ describe('Menu component rendering', () => {
 
 		// Check title appears only once
 		const titleMatches =
-			output?.match(/CCManager - Claude Code Worktree Manager/g) || [];
+			output?.match(
+				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+			) || [];
 		expect(titleMatches.length).toBe(1);
 
 		// Check description appears only once

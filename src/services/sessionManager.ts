@@ -8,7 +8,7 @@ import {
 } from '../types/index.js';
 import {EventEmitter} from 'events';
 import pkg from '@xterm/headless';
-import {exec} from 'child_process';
+import {exec, spawn as cpSpawn} from 'child_process';
 import {promisify} from 'util';
 import {configurationManager} from './configurationManager.js';
 import {executeStatusHook} from '../utils/hookExecutor.js';
@@ -586,6 +586,130 @@ export class SessionManager extends EventEmitter implements ISessionManager {
 						error instanceof Error
 							? error.message
 							: 'Failed to create session with devcontainer',
+				});
+			},
+		});
+	}
+
+	/**
+	 * Run Claude in headless mode with a prompt using Effect-based error handling
+	 *
+	 * @param {string} worktreePath - Path to the worktree
+	 * @param {string} prompt - Prompt to pass to Claude with -p flag
+	 * @param {string} [presetId] - Optional preset ID for custom command, uses default if not provided
+	 * @returns {Effect.Effect<string, ProcessError | ConfigError, never>} Effect that returns command output or fails with ProcessError/ConfigError
+	 *
+	 * @example
+	 * ```typescript
+	 * const result = await Effect.runPromise(
+	 *   Effect.match(
+	 *     sessionManager.runHeadlessModeEffect(
+	 *       '/path/to/worktree',
+	 *       'Analyze the project and determine branch name'
+	 *     ),
+	 *     {
+	 *       onFailure: (error) => ({ type: 'error', message: error.message }),
+	 *       onSuccess: (output) => ({ type: 'success', data: output })
+	 *     }
+	 *   )
+	 * );
+	 * ```
+	 */
+	runHeadlessModeEffect(
+		worktreePath: string,
+		prompt: string,
+		presetId?: string,
+	): Effect.Effect<string, ProcessError | ConfigError, never> {
+		return Effect.tryPromise({
+			try: async () => {
+				// Get preset configuration
+				let preset = presetId
+					? configurationManager.getPresetById(presetId)
+					: null;
+				if (!preset) {
+					preset = configurationManager.getDefaultPreset();
+				}
+
+				// Validate preset exists
+				if (!preset) {
+					throw new ConfigError({
+						configPath: 'configuration',
+						reason: 'validation',
+						details: presetId
+							? `Preset with ID '${presetId}' not found and no default preset available`
+							: 'No default preset available',
+					});
+				}
+
+				const command = preset.command;
+				const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+
+				if (verbose) {
+					console.error('\n[DEBUG] Running Claude in headless mode:');
+					console.error(`  Command: ${command}`);
+					console.error(`  Args: ["-p", "<prompt>"]`);
+					console.error(`  Working directory: ${worktreePath}`);
+				}
+
+				// Use spawn with proper argument array to avoid quote escaping issues
+				return new Promise<string>((resolve, reject) => {
+					const child = cpSpawn(command, ['-p', prompt], {
+						cwd: worktreePath,
+						env: process.env,
+						stdio: ['ignore', 'pipe', 'pipe'], // stdin ignored, capture stdout/stderr
+					});
+
+					let stdout = '';
+					let stderr = '';
+
+					child.stdout.on('data', (data: Buffer) => {
+						stdout += data.toString();
+					});
+
+					child.stderr.on('data', (data: Buffer) => {
+						stderr += data.toString();
+					});
+
+					const timeout = setTimeout(() => {
+						child.kill('SIGTERM');
+						reject(new Error('Claude command timed out after 60 seconds'));
+					}, 60000);
+
+					child.on('close', (code: number | null) => {
+						clearTimeout(timeout);
+
+						if (verbose) {
+							console.error(`  Exit code: ${code}`);
+							console.error(`  Stdout length: ${stdout.length} chars`);
+							console.error(`  Stderr length: ${stderr.length} chars\n`);
+						}
+
+						if (code === 0) {
+							resolve(stdout + (stderr ? `\n[stderr]: ${stderr}` : ''));
+						} else {
+							reject(new Error(`Command failed with exit code ${code}: ${stderr || stdout}`));
+						}
+					});
+
+					child.on('error', (err: Error) => {
+						clearTimeout(timeout);
+						reject(err);
+					});
+				});
+			},
+			catch: (error: unknown) => {
+				// If it's already a ConfigError, return it
+				if (error instanceof ConfigError) {
+					return error;
+				}
+
+				// Wrap exec errors in ProcessError
+				return new ProcessError({
+					command: 'claude -p (headless mode)',
+					message:
+						error instanceof Error
+							? error.message
+							: 'Failed to run Claude in headless mode',
 				});
 			},
 		});

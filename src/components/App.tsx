@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useCallback} from 'react';
+import React, {useState, useEffect, useCallback, useRef} from 'react';
 import {useApp, Box, Text} from 'ink';
 import {Effect} from 'effect';
 import Menu from './Menu.js';
@@ -20,7 +20,7 @@ import {
 	DevcontainerConfig,
 	GitProject,
 	AmbiguousBranchError,
-	RemoteBranchMatch,
+	WorkType,
 } from '../types/index.js';
 import {type AppError} from '../types/errors.js';
 import {configurationManager} from '../services/configurationManager.js';
@@ -34,6 +34,7 @@ type View =
 	| 'session'
 	| 'new-worktree'
 	| 'creating-worktree'
+	| 'naming-worktree'
 	| 'creating-session'
 	| 'creating-session-preset'
 	| 'delete-worktree'
@@ -70,6 +71,9 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 		null,
 	); // Store selected project in multi-project mode
 
+	// Guard against double execution of worktree creation
+	const isCreatingWorktree = useRef(false);
+
 	// State for remote branch disambiguation
 	const [pendingWorktreeCreation, setPendingWorktreeCreation] = useState<{
 		path: string;
@@ -84,6 +88,8 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 	const [loadingContext, setLoadingContext] = useState<{
 		copySessionData?: boolean;
 		deleteBranch?: boolean;
+		workType?: WorkType;
+		finalBranchName?: string;
 	}>({});
 
 	// Helper function to format error messages based on error type using _tag discrimination
@@ -195,69 +201,6 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 	}, [sessionManager, multiProject, selectedProject, navigateWithClear]);
 
 	// Helper function to parse ambiguous branch error and create AmbiguousBranchError
-	const parseAmbiguousBranchError = (
-		errorMessage: string,
-	): AmbiguousBranchError | null => {
-		const pattern =
-			/Ambiguous branch '(.+?)' found in multiple remotes: (.+?)\. Please specify which remote to use\./;
-		const match = errorMessage.match(pattern);
-
-		if (!match) {
-			return null;
-		}
-
-		const branchName = match[1]!;
-		const remoteRefsText = match[2]!;
-		const remoteRefs = remoteRefsText.split(', ');
-
-		// Parse remote refs into RemoteBranchMatch objects
-		const matches: RemoteBranchMatch[] = remoteRefs.map(fullRef => {
-			const parts = fullRef.split('/');
-			const remote = parts[0]!;
-			const branch = parts.slice(1).join('/');
-			return {
-				remote,
-				branch,
-				fullRef,
-			};
-		});
-
-		return new AmbiguousBranchError(branchName, matches);
-	};
-
-	// Helper function to handle worktree creation results
-	const handleWorktreeCreationResult = (
-		result: {success: boolean; error?: string},
-		creationData: {
-			path: string;
-			branch: string;
-			baseBranch: string;
-			copySessionData: boolean;
-			copyClaudeDirectory: boolean;
-		},
-	) => {
-		if (result.success) {
-			handleReturnToMenu();
-			return;
-		}
-
-		const errorMessage = result.error || 'Failed to create worktree';
-		const ambiguousError = parseAmbiguousBranchError(errorMessage);
-
-		if (ambiguousError) {
-			// Handle ambiguous branch error
-			setPendingWorktreeCreation({
-				...creationData,
-				ambiguousError,
-			});
-			navigateWithClear('remote-branch-selector');
-		} else {
-			// Handle regular error
-			setError(errorMessage);
-			setView('new-worktree');
-		}
-	};
-
 	const handleSelectWorktree = async (worktree: Worktree) => {
 		// Check if this is the new worktree option
 		if (worktree.path === '') {
@@ -384,45 +327,184 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 	};
 
 	const handleCreateWorktree = async (
-		path: string,
-		branch: string,
 		baseBranch: string,
-		copySessionData: boolean,
-		copyClaudeDirectory: boolean,
+		workType: WorkType,
+		description: string,
 	) => {
-		// Set loading context before showing loading view
-		setLoadingContext({copySessionData});
+		// Guard against double execution
+		if (isCreatingWorktree.current) {
+			return;
+		}
+		isCreatingWorktree.current = true;
+
 		setView('creating-worktree');
 		setError(null);
 
-		// Create the worktree using Effect
-		const result = await Effect.runPromise(
+		// Generate a temporary branch name with timestamp
+		const tempBranchName = `temp-${Date.now()}`;
+
+		// Determine worktree path (auto-generate or use config pattern)
+		const worktreeConfig = configurationManager.getWorktreeConfig();
+		const projectRoot = selectedProject?.path || process.cwd();
+		let worktreePath: string;
+
+		const path = await import('path');
+		const fs = await import('fs');
+		const verbose = process.env['AUTOCC_VERBOSE'] === '1';
+
+		// Always create .autocc directory in the git repo for organization
+		const autoccDir = path.default.join(projectRoot, '.autocc');
+		if (!fs.default.existsSync(autoccDir)) {
+			if (verbose) {
+				console.error(`[DEBUG] Creating .autocc directory: ${autoccDir}`);
+			}
+			fs.default.mkdirSync(autoccDir, {recursive: true});
+
+			// Update .gitignore to exclude .autocc
+			const gitignorePath = path.default.join(projectRoot, '.gitignore');
+			try {
+				let gitignoreContent = '';
+				if (fs.default.existsSync(gitignorePath)) {
+					gitignoreContent = fs.default.readFileSync(gitignorePath, 'utf8');
+				}
+
+				// Check if .autocc/ is already in .gitignore
+				if (!gitignoreContent.includes('.autocc/')) {
+					// Add .autocc/ to .gitignore
+					const newContent = gitignoreContent.trim()
+						? `${gitignoreContent.trim()}\n.autocc/\n`
+						: `.autocc/\n`;
+					fs.default.writeFileSync(gitignorePath, newContent, 'utf8');
+
+					if (verbose) {
+						console.error(`[DEBUG] Added .autocc/ to .gitignore`);
+					}
+				}
+			} catch (error) {
+				// Non-critical error - just log it
+				if (verbose) {
+					console.error(`[DEBUG] Warning: Failed to update .gitignore: ${error}`);
+				}
+			}
+		}
+
+		if (worktreeConfig.autoDirectory) {
+			// Generate path using pattern within .autocc folder
+			const pattern = (
+				worktreeConfig.autoDirectoryPattern || '../{branch}'
+			).replace(/^\.\.\//,''); // Remove leading ../
+			const folderName = pattern
+				.replace('{branch}', tempBranchName)
+				.replace('{project}', path.default.basename(projectRoot));
+
+			worktreePath = path.default.join(autoccDir, folderName);
+
+			if (verbose) {
+				console.error(`[DEBUG] Generated worktree path: ${worktreePath}`);
+			}
+		} else {
+			// Use default pattern: .autocc/temp-{timestamp} to avoid polluting parent directory
+			worktreePath = path.default.join(autoccDir, tempBranchName);
+
+			if (verbose) {
+				console.error(`[DEBUG] Using default worktree path: ${worktreePath}`);
+			}
+		}
+
+		// Step 1: Create the worktree with temp branch name
+		// Always copy .claude directory, never copy session data (fresh start)
+		const createResult = await Effect.runPromise(
 			Effect.either(
 				worktreeService.createWorktreeEffect(
-					path,
-					branch,
+					worktreePath,
+					tempBranchName,
 					baseBranch,
-					copySessionData,
-					copyClaudeDirectory,
+					false, // copySessionData - always false
+					true, // copyClaudeDirectory - always true
+					workType,
+					description,
 				),
 			),
 		);
 
-		// Transform Effect result to legacy format for handleWorktreeCreationResult
-		if (result._tag === 'Left') {
-			// Handle error using pattern matching on _tag
-			const errorMessage = formatErrorMessage(result.left);
-			handleWorktreeCreationResult(
-				{success: false, error: errorMessage},
-				{path, branch, baseBranch, copySessionData, copyClaudeDirectory},
-			);
-		} else {
-			// Success case
-			handleWorktreeCreationResult(
-				{success: true},
-				{path, branch, baseBranch, copySessionData, copyClaudeDirectory},
-			);
+		if (createResult._tag === 'Left') {
+			// Handle error
+			const errorMessage = formatErrorMessage(createResult.left);
+			setError(`Failed to create worktree: ${errorMessage}`);
+			setView('new-worktree');
+			isCreatingWorktree.current = false;
+			return;
 		}
+
+		// Step 2: Run headless Claude to determine branch name and setup environment
+		setLoadingContext({workType});
+		setView('naming-worktree');
+
+		const setupResult = await Effect.runPromise(
+			Effect.either(
+				worktreeService.setupWorktreeWithClaudeEffect(
+					worktreePath,
+					tempBranchName,
+					workType,
+					description,
+					sessionManager,
+				),
+			),
+		);
+
+		if (setupResult._tag === 'Left') {
+			// Setup failed, but worktree was created - inform user
+			const errorMessage = formatErrorMessage(setupResult.left);
+			setError(
+				`Worktree created but setup failed: ${errorMessage}\nBranch name: ${tempBranchName}\nPath: ${worktreePath}`,
+			);
+			isCreatingWorktree.current = false;
+			handleReturnToMenu();
+			return;
+		}
+
+		const finalBranchName = setupResult.right;
+
+		// Rename the worktree folder to match the branch name using git worktree move
+		// This updates git's internal references properly
+		const finalWorktreePath = path.default.join(
+			path.default.dirname(worktreePath),
+			finalBranchName,
+		);
+
+		if (verbose) {
+			console.error(`[DEBUG] Moving worktree: ${worktreePath} → ${finalWorktreePath}`);
+		}
+
+		try {
+			const {execSync} = await import('child_process');
+			execSync(`git worktree move "${worktreePath}" "${finalWorktreePath}"`, {
+				cwd: projectRoot,
+				encoding: 'utf8',
+			});
+
+			if (verbose) {
+				console.error(`[DEBUG] Worktree moved successfully`);
+			}
+		} catch (error) {
+			setError(
+				`Worktree created with branch ${finalBranchName}, but failed to move folder: ${error}`,
+			);
+			isCreatingWorktree.current = false;
+			handleReturnToMenu();
+			return;
+		}
+
+		// Show success message with final branch name
+		setLoadingContext({workType, finalBranchName});
+		setView('naming-worktree');
+
+		// Wait a moment to show the success message
+		await new Promise(resolve => setTimeout(resolve, 2000));
+
+		// Success! Return to menu - user can manually start a session by selecting the worktree
+		isCreatingWorktree.current = false;
+		handleReturnToMenu();
 	};
 
 	const handleCancelNewWorktree = () => {
@@ -618,6 +700,23 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 		return (
 			<Box flexDirection="column">
 				<LoadingSpinner message={message} color="cyan" />
+			</Box>
+		);
+	}
+
+	if (view === 'naming-worktree') {
+		// Show different message based on whether we have final name
+		const workTypeLabel = loadingContext.workType || 'feature';
+		const message = loadingContext.finalBranchName
+			? `Worktree created: ${loadingContext.finalBranchName}`
+			: `Checking with Claude on an effective branch name for your ${workTypeLabel} work...`;
+
+		return (
+			<Box flexDirection="column">
+				<LoadingSpinner
+					message={message}
+					color={loadingContext.finalBranchName ? 'green' : 'cyan'}
+				/>
 			</Box>
 		);
 	}

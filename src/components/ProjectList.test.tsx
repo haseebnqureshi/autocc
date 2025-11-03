@@ -127,7 +127,9 @@ describe('ProjectList', () => {
 			/>,
 		);
 
-		expect(lastFrame()).toContain('CCManager - Multi-Project Mode');
+		expect(lastFrame()).toContain(
+			'autocc - Multi-Project Mode (fork of ccmanager)',
+		);
 		expect(lastFrame()).toContain('Select a project:');
 	});
 
