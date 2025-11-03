@@ -1,6 +1,6 @@
 {
 	"name": "autocc",
-	"version": "1.4.0",
+	"version": "1.4.1",
 	"description": "Automated Claude Code workspace manager with intelligent branch naming and environment setup. Forked from ccmanager by Kodai Kabasawa.",
 	"license": "MIT",
 	"author": "Haseeb Qureshi",

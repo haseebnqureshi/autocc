@@ -84,6 +84,36 @@ if (cli.flags.multiProject && !process.env['CCMANAGER_MULTI_PROJECT_ROOT']) {
 // Initialize worktree config manager
 worktreeConfigManager.initialize();
 
+// Check for updates asynchronously (non-blocking)
+const checkForUpdates = async () => {
+	try {
+		const {exec} = await import('child_process');
+		const {promisify} = await import('util');
+		const execAsync = promisify(exec);
+
+		const {stdout} = await execAsync('npm view autocc version', {
+			timeout: 3000,
+		});
+		const latestVersion = stdout.trim();
+		const currentVersion = cli.pkg.version;
+
+		if (latestVersion !== currentVersion) {
+			// Show update message
+			console.error(
+				`\n\x1b[33m⚠ Update available: autocc@${latestVersion} (you have ${currentVersion})\x1b[0m`,
+			);
+			console.error(
+				`\x1b[33m  Run: npm install -g autocc to update\x1b[0m\n`,
+			);
+		}
+	} catch {
+		// Silently fail - update check is non-critical
+	}
+};
+
+// Run update check in background
+checkForUpdates();
+
 // Prepare devcontainer config
 const devcontainerConfig =
 	cli.flags.devcUpCommand && cli.flags.devcExecCommand
