@@ -1,5 +1,12 @@
 import {execSync} from 'child_process';
-import {existsSync, statSync, cpSync, readFileSync, writeFileSync, symlinkSync, readdirSync} from 'fs';
+import {
+	existsSync,
+	statSync,
+	cpSync,
+	readFileSync,
+	writeFileSync,
+	symlinkSync,
+} from 'fs';
 import path from 'path';
 import {Effect, Either} from 'effect';
 import {
@@ -847,7 +854,9 @@ export class WorktreeService {
 					} catch (error) {
 						// Ignore individual symlink failures
 						if (verbose) {
-							console.error(`  Warning: Failed to symlink ${envFile}: ${error}`);
+							console.error(
+								`  Warning: Failed to symlink ${envFile}: ${error}`,
+							);
 						}
 					}
 				}
