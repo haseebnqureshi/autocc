@@ -25,6 +25,10 @@ vi.mock('./worktreeConfigManager.js', () => ({
 vi.mock('./configurationManager.js', () => ({
 	configurationManager: {
 		getWorktreeHooks: vi.fn(),
+		getWorktreeConfig: vi.fn(() => ({
+			autoDirectory: false,
+			symlinkEnvFiles: true,
+		})),
 	},
 }));
 

@@ -94,6 +94,7 @@ export interface WorktreeConfig {
 	copySessionData?: boolean; // Whether to copy Claude session data by default
 	sortByLastSession?: boolean; // Whether to sort worktrees by last opened session
 	defaultBaseBranch?: string; // Default base branch for new worktrees
+	symlinkEnvFiles?: boolean; // Whether to automatically symlink env files from main worktree
 }
 
 export interface CommandConfig {

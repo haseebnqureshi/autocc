@@ -14,7 +14,9 @@
       "Bash(npm unlink:*)",
       "Bash(git worktree:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npm publish:*)"
     ],
     "deny": [],
     "ask": []

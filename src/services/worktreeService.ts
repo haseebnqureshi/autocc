@@ -1,5 +1,5 @@
 import {execSync} from 'child_process';
-import {existsSync, statSync, cpSync, readFileSync, writeFileSync} from 'fs';
+import {existsSync, statSync, cpSync, readFileSync, writeFileSync, symlinkSync, readdirSync} from 'fs';
 import path from 'path';
 import {Effect, Either} from 'effect';
 import {
@@ -809,6 +809,59 @@ export class WorktreeService {
 	}
 
 	/**
+	 * Symlink environment files from main worktree to new worktree
+	 * Detects common env files (.env, .env.local, etc.) and creates symlinks
+	 *
+	 * @private
+	 * @param {string} targetWorktreePath - Path to the new worktree
+	 * @param {string} mainWorktreePath - Path to the main worktree
+	 * @returns {Effect.Effect<void, never, never>} Effect that completes successfully
+	 */
+	private symlinkEnvFilesEffect(
+		targetWorktreePath: string,
+		mainWorktreePath: string,
+	): Effect.Effect<void, never, never> {
+		return Effect.sync(() => {
+			const verbose = process.env['AUTOCC_VERBOSE'] === '1';
+
+			// Common env file patterns
+			const envPatterns = [
+				'.env',
+				'.env.local',
+				'.env.development',
+				'.env.production',
+				'.env.test',
+			];
+
+			const symlinkedFiles: string[] = [];
+
+			for (const envFile of envPatterns) {
+				const sourcePath = path.join(mainWorktreePath, envFile);
+				const targetPath = path.join(targetWorktreePath, envFile);
+
+				// Check if file exists in main worktree and not already in target
+				if (existsSync(sourcePath) && !existsSync(targetPath)) {
+					try {
+						symlinkSync(sourcePath, targetPath);
+						symlinkedFiles.push(envFile);
+					} catch (error) {
+						// Ignore individual symlink failures
+						if (verbose) {
+							console.error(`  Warning: Failed to symlink ${envFile}: ${error}`);
+						}
+					}
+				}
+			}
+
+			if (verbose && symlinkedFiles.length > 0) {
+				console.error(
+					`[DEBUG] Symlinked env files: ${symlinkedFiles.join(', ')}\n`,
+				);
+			}
+		});
+	}
+
+	/**
 	 * Effect-based createWorktree operation
 	 * May fail with GitError or FileSystemError
 	 *
@@ -977,6 +1030,22 @@ export class WorktreeService {
 					),
 					(error: unknown) => {
 						console.error('Warning: Failed to copy .claude directory:', error);
+						return Effect.succeed(undefined);
+					},
+				);
+			}
+
+			// Symlink env files if configured
+			const worktreeConfig = configurationManager.getWorktreeConfig();
+			if (worktreeConfig.symlinkEnvFiles !== false) {
+				// Default to true
+				yield* Effect.catchAll(
+					self.symlinkEnvFilesEffect(resolvedPath, absoluteGitRoot),
+					(error: unknown) => {
+						const verbose = process.env['AUTOCC_VERBOSE'] === '1';
+						if (verbose) {
+							console.error('Warning: Failed to symlink env files:', error);
+						}
 						return Effect.succeed(undefined);
 					},
 				);
