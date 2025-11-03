@@ -102,9 +102,7 @@ const checkForUpdates = async () => {
 			console.error(
 				`\n\x1b[33m⚠ Update available: autocc@${latestVersion} (you have ${currentVersion})\x1b[0m`,
 			);
-			console.error(
-				`\x1b[33m  Run: npm install -g autocc to update\x1b[0m\n`,
-			);
+			console.error(`\x1b[33m  Run: npm install -g autocc to update\x1b[0m\n`);
 		}
 	} catch {
 		// Silently fail - update check is non-critical
