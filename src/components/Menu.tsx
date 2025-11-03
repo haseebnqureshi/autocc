@@ -343,6 +343,7 @@ const Menu: React.FC<MenuProps> = ({
 		}
 
 		// THIRD: Add all worktrees in "All" section or when searching
+		// Use unique keys by appending "-all" to avoid React duplicate key warnings
 		filteredItems.forEach((item, index) => {
 			const label = assembleWorktreeLabel(item, columnPositions);
 			const numberPrefix = !isSearchMode && index < 10 ? `${index} ❯ ` : '❯ ';
@@ -350,7 +351,7 @@ const Menu: React.FC<MenuProps> = ({
 			menuItems.push({
 				type: 'worktree',
 				label: numberPrefix + label,
-				value: item.worktree.path,
+				value: `${item.worktree.path}-all`, // Unique key for "All" section
 				worktree: item.worktree,
 			});
 		});
@@ -599,6 +600,8 @@ const Menu: React.FC<MenuProps> = ({
 				hasSession: false,
 			});
 		} else if (item.type === 'worktree') {
+			// Worktree item - the value might have -all suffix from "All Worktrees" section
+			// But item.worktree already has the correct path
 			onSelectWorktree(item.worktree);
 		}
 	};
