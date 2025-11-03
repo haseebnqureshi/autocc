@@ -110,8 +110,9 @@ export class WorktreeService {
 	 * @throws {AmbiguousBranchError} When branch exists in multiple remotes
 	 */
 	private resolveBranchReference(branchName: string): string {
-		const verbose = process.env["AUTOCC_VERBOSE"] === '1';
-		if (verbose) console.error(`\n[DEBUG] resolveBranchReference: ${branchName}`);
+		const verbose = process.env['AUTOCC_VERBOSE'] === '1';
+		if (verbose)
+			console.error(`\n[DEBUG] resolveBranchReference: ${branchName}`);
 		try {
 			// Get all remotes and check for remote branches FIRST
 			const remotes = this.getAllRemotes();
@@ -140,14 +141,21 @@ export class WorktreeService {
 			}
 
 			// Handle remote branch results
-			if (verbose) console.error(`  Remote matches found: ${remoteBranchMatches.length}`);
+			if (verbose)
+				console.error(`  Remote matches found: ${remoteBranchMatches.length}`);
 			if (remoteBranchMatches.length === 1) {
 				// Single remote branch found, use it (highest priority)
-				if (verbose) console.error(`  → Using remote: ${remoteBranchMatches[0]!.fullRef}\n`);
+				if (verbose)
+					console.error(
+						`  → Using remote: ${remoteBranchMatches[0]!.fullRef}\n`,
+					);
 				return remoteBranchMatches[0]!.fullRef;
 			} else if (remoteBranchMatches.length > 1) {
 				// Multiple remote branches found, throw ambiguous error
-				if (verbose) console.error(`  → Multiple remotes found, throwing ambiguous error\n`);
+				if (verbose)
+					console.error(
+						`  → Multiple remotes found, throwing ambiguous error\n`,
+					);
 				throw new AmbiguousBranchError(branchName, remoteBranchMatches);
 			}
 
@@ -167,7 +175,10 @@ export class WorktreeService {
 			}
 
 			// No branches found at all, return original (let git handle the error)
-			if (verbose) console.error(`  → No branches found, returning original: ${branchName}\n`);
+			if (verbose)
+				console.error(
+					`  → No branches found, returning original: ${branchName}\n`,
+				);
 			return branchName;
 		} catch (error) {
 			// Re-throw AmbiguousBranchError as-is
@@ -887,7 +898,7 @@ export class WorktreeService {
 			);
 
 			// Create the worktree command
-			const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+			const verbose = process.env['AUTOCC_VERBOSE'] === '1';
 			let command: string;
 			if (branchExists) {
 				command = `git worktree add "${resolvedPath}" "${branch}"`;
@@ -1074,7 +1085,7 @@ Example:
 				prompt,
 			);
 
-			const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+			const verbose = process.env['AUTOCC_VERBOSE'] === '1';
 			if (verbose) {
 				console.error('\n[DEBUG] Claude output received:');
 				console.error(output.substring(0, 500));
@@ -1085,7 +1096,9 @@ Example:
 			let newBranchName: string;
 			try {
 				// Strip markdown code fences if present
-				let cleanedOutput = output.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+				let cleanedOutput = output
+					.replace(/```json\s*/g, '')
+					.replace(/```\s*/g, '');
 
 				// Extract JSON from output (might have surrounding text)
 				const jsonMatch = cleanedOutput.match(/\{[^}]*"branchName"[^}]*\}/);
@@ -1145,10 +1158,13 @@ Example:
 			let counter = 2;
 			while (true) {
 				try {
-					execSync(`git show-ref --verify --quiet refs/heads/${finalBranchName}`, {
-						cwd: worktreePath,
-						encoding: 'utf8',
-					});
+					execSync(
+						`git show-ref --verify --quiet refs/heads/${finalBranchName}`,
+						{
+							cwd: worktreePath,
+							encoding: 'utf8',
+						},
+					);
 					// Branch exists, try next number
 					finalBranchName = `${newBranchName}-${counter}`;
 					counter++;
@@ -1169,14 +1185,18 @@ Example:
 			}
 
 			if (verbose && finalBranchName !== newBranchName) {
-				console.error(`[DEBUG] Branch name already existed, using: ${finalBranchName}`);
+				console.error(
+					`[DEBUG] Branch name already existed, using: ${finalBranchName}`,
+				);
 			}
 
 			// Now WE rename the branch (Claude only suggested the name)
 			yield* Effect.try({
 				try: () => {
 					if (verbose) {
-						console.error(`[DEBUG] Renaming branch: ${currentBranchName} → ${finalBranchName}`);
+						console.error(
+							`[DEBUG] Renaming branch: ${currentBranchName} → ${finalBranchName}`,
+						);
 					}
 					execSync(`git branch -m ${currentBranchName} ${finalBranchName}`, {
 						cwd: worktreePath,
@@ -1221,7 +1241,9 @@ Example:
 			}
 
 			if (verbose) {
-				console.error(`[DEBUG] Branch successfully renamed to: ${finalBranchName}\n`);
+				console.error(
+					`[DEBUG] Branch successfully renamed to: ${finalBranchName}\n`,
+				);
 			}
 
 			// Create/update claude.md with minimal work context
@@ -1251,7 +1273,9 @@ Example:
 				(error: unknown) => {
 					// Non-critical error - just log it and continue
 					if (verbose) {
-						console.error(`[DEBUG] Warning: Failed to update claude.md: ${error}\n`);
+						console.error(
+							`[DEBUG] Warning: Failed to update claude.md: ${error}\n`,
+						);
 					}
 					return Effect.void;
 				},

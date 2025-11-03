@@ -62,7 +62,7 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 
 // Set verbose flag globally
 if (cli.flags.verbose) {
-	process.env["AUTOCC_VERBOSE"] = '1';
+	process.env['AUTOCC_VERBOSE'] = '1';
 }
 
 // Check for CCMANAGER_MULTI_PROJECT_ROOT when using --multi-project

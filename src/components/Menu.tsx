@@ -235,9 +235,7 @@ const Menu: React.FC<MenuProps> = ({
 			),
 			other: filteredItems.filter(
 				item =>
-					!item.worktree.branch?.match(
-						/^(feature|hotfix|maintenance|lab)-/,
-					),
+					!item.worktree.branch?.match(/^(feature|hotfix|maintenance|lab)-/),
 			),
 		};
 
@@ -347,8 +345,7 @@ const Menu: React.FC<MenuProps> = ({
 		// THIRD: Add all worktrees in "All" section or when searching
 		filteredItems.forEach((item, index) => {
 			const label = assembleWorktreeLabel(item, columnPositions);
-			const numberPrefix =
-				!isSearchMode && index < 10 ? `${index} ❯ ` : '❯ ';
+			const numberPrefix = !isSearchMode && index < 10 ? `${index} ❯ ` : '❯ ';
 
 			menuItems.push({
 				type: 'worktree',

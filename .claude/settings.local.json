@@ -12,7 +12,9 @@
       "Bash(npm link)",
       "Bash(xargs sed:*)",
       "Bash(npm unlink:*)",
-      "Bash(git worktree:*)"
+      "Bash(git worktree:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []

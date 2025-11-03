@@ -642,7 +642,7 @@ export class SessionManager extends EventEmitter implements ISessionManager {
 				}
 
 				const command = preset.command;
-				const verbose = process.env["AUTOCC_VERBOSE"] === '1';
+				const verbose = process.env['AUTOCC_VERBOSE'] === '1';
 
 				if (verbose) {
 					console.error('\n[DEBUG] Running Claude in headless mode:');
@@ -687,7 +687,11 @@ export class SessionManager extends EventEmitter implements ISessionManager {
 						if (code === 0) {
 							resolve(stdout + (stderr ? `\n[stderr]: ${stderr}` : ''));
 						} else {
-							reject(new Error(`Command failed with exit code ${code}: ${stderr || stdout}`));
+							reject(
+								new Error(
+									`Command failed with exit code ${code}: ${stderr || stdout}`,
+								),
+							);
 						}
 					});
 

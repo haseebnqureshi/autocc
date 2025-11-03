@@ -383,7 +383,9 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 			} catch (error) {
 				// Non-critical error - just log it
 				if (verbose) {
-					console.error(`[DEBUG] Warning: Failed to update .gitignore: ${error}`);
+					console.error(
+						`[DEBUG] Warning: Failed to update .gitignore: ${error}`,
+					);
 				}
 			}
 		}
@@ -392,7 +394,7 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 			// Generate path using pattern within .autocc folder
 			const pattern = (
 				worktreeConfig.autoDirectoryPattern || '../{branch}'
-			).replace(/^\.\.\//,''); // Remove leading ../
+			).replace(/^\.\.\//, ''); // Remove leading ../
 			const folderName = pattern
 				.replace('{branch}', tempBranchName)
 				.replace('{project}', path.default.basename(projectRoot));
@@ -473,7 +475,9 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 		);
 
 		if (verbose) {
-			console.error(`[DEBUG] Moving worktree: ${worktreePath} → ${finalWorktreePath}`);
+			console.error(
+				`[DEBUG] Moving worktree: ${worktreePath} → ${finalWorktreePath}`,
+			);
 		}
 
 		try {
