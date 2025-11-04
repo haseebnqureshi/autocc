@@ -18,7 +18,15 @@
       "Bash(git push:*)",
       "Bash(npm publish:*)",
       "Bash(chmod:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(npm run typecheck:*)",
+      "WebSearch",
+      "WebFetch(domain:motlin.com)",
+      "WebFetch(domain:support.claude.com)",
+      "Bash(node -e \"import(''''./dist/cli.js'''').then(m => console.log(''''Module loaded''''))\")",
+      "Bash(readlink:*)",
+      "Bash(npm config:*)",
+      "Bash(npm bin:*)"
     ],
     "deny": [],
     "ask": []
