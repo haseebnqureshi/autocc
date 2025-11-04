@@ -128,7 +128,7 @@ describe('ProjectList', () => {
 		);
 
 		expect(lastFrame()).toContain(
-			'autocc - Multi-Project Mode (fork of ccmanager)',
+			'AutoCC - Claude-Powered Worktrees for Stacked Velocity',
 		);
 		expect(lastFrame()).toContain('Select a project:');
 	});

@@ -343,6 +343,15 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 		// Generate a temporary branch name with timestamp
 		const tempBranchName = `temp-${Date.now()}`;
 
+		// Generate final branch name format for directory (even though Claude will suggest the actual branch name)
+		// This creates a predictable directory structure: {baseBranch}-{workType}/{description}
+		const descriptionSlug = description
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-') // Replace non-alphanumeric with hyphens
+			.replace(/^-+|-+$/g, '') // Remove leading/trailing hyphens
+			.substring(0, 50); // Limit length
+		const finalBranchFormat = `${workType}/${descriptionSlug}`;
+
 		// Determine worktree path (auto-generate or use config pattern)
 		const worktreeConfig = configurationManager.getWorktreeConfig();
 		const projectRoot = selectedProject?.path || process.cwd();
@@ -391,22 +400,45 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 		}
 
 		if (worktreeConfig.autoDirectory) {
-			// Generate path using pattern within .autocc folder
+			// Import generateWorktreeDirectory for proper directory naming
+			const {generateWorktreeDirectory} = await import(
+				'../utils/worktreeUtils.js'
+			);
+
+			// Generate path using pattern within .autocc folder, prepending base branch
 			const pattern = (
 				worktreeConfig.autoDirectoryPattern || '../{branch}'
 			).replace(/^\.\.\//, ''); // Remove leading ../
-			const folderName = pattern
-				.replace('{branch}', tempBranchName)
-				.replace('{project}', path.default.basename(projectRoot));
+
+			// Use generateWorktreeDirectory with base branch to get proper naming
+			const folderName = generateWorktreeDirectory(
+				projectRoot,
+				finalBranchFormat,
+				pattern,
+				baseBranch,
+			).replace(/^\.\.\//, '');
 
 			worktreePath = path.default.join(autoccDir, folderName);
 
 			if (verbose) {
 				console.error(`[DEBUG] Generated worktree path: ${worktreePath}`);
+				console.error(
+					`[DEBUG] Using base branch: ${baseBranch}, branch format: ${finalBranchFormat}`,
+				);
 			}
 		} else {
-			// Use default pattern: .autocc/temp-{timestamp} to avoid polluting parent directory
-			worktreePath = path.default.join(autoccDir, tempBranchName);
+			// Use default pattern with base branch prefix
+			const {generateWorktreeDirectory} = await import(
+				'../utils/worktreeUtils.js'
+			);
+			const folderName = generateWorktreeDirectory(
+				projectRoot,
+				finalBranchFormat,
+				'{branch}',
+				baseBranch,
+			);
+
+			worktreePath = path.default.join(autoccDir, folderName);
 
 			if (verbose) {
 				console.error(`[DEBUG] Using default worktree path: ${worktreePath}`);

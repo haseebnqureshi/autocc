@@ -762,6 +762,27 @@ export class WorktreeService {
 						worktrees[0]!.isMainWorktree = true;
 					}
 
+					// Fetch parent branch for each worktree
+					for (const worktree of worktrees) {
+						try {
+							// Get parent branch from git config synchronously
+							const result = execSync(
+								'git config --worktree ccmanager.parentBranch',
+								{
+									cwd: worktree.path,
+									encoding: 'utf8',
+									stdio: ['pipe', 'pipe', 'ignore'], // Ignore stderr
+								},
+							);
+							const parentBranch = result.trim();
+							if (parentBranch) {
+								worktree.parentBranch = parentBranch;
+							}
+						} catch {
+							// Ignore errors - parent branch is optional
+						}
+					}
+
 					// Sort worktrees by last session if requested
 					if (sortByLastSession) {
 						worktrees.sort((a, b) => {
@@ -1138,24 +1159,24 @@ export class WorktreeService {
 			const prompt = `You are a git branch naming assistant. The user is starting ${workType} work to: ${description}
 
 Suggest an appropriate git branch name following these rules:
-- Prefix with work type: ${workType}-
+- Prefix with work type: ${workType}/
 - Maximum 3 hyphenated words after prefix
-- Only lowercase letters, numbers, and hyphens
+- Only lowercase letters, numbers, hyphens, and slashes
 - Be concise and descriptive
 
 Examples:
-- feature-video-storage-checks
-- hotfix-auth-token-expire
-- maintenance-refactor-api-layer
-- lab-test-new-framework
+- feature/video-storage-checks
+- hotfix/auth-token-expire
+- maintenance/refactor-api-layer
+- lab/test-new-framework
 
 CRITICAL: Respond ONLY with valid JSON, no explanations, no markdown, no additional text.
 
 Response format:
-{"branchName":"${workType}-word1-word2-word3"}
+{"branchName":"${workType}/word1-word2-word3"}
 
 Example:
-{"branchName":"maintenance-collab-engine-refactor"}`;
+{"branchName":"maintenance/collab-engine-refactor"}`;
 
 			// Run Claude in headless mode
 			const output = yield* sessionManager.runHeadlessModeEffect(
@@ -1220,13 +1241,13 @@ Example:
 
 			// Validate branch name format
 			const validBranchRegex =
-				/^(feature|hotfix|maintenance|lab)-[a-z0-9]+-[a-z0-9]+(-[a-z0-9]+)?$/;
+				/^(feature|hotfix|maintenance|lab)\/[a-z0-9]+-[a-z0-9]+(-[a-z0-9]+)?$/;
 			if (!validBranchRegex.test(newBranchName)) {
 				return yield* Effect.fail(
 					new GitError({
 						command: 'validate branch name',
 						exitCode: 1,
-						stderr: `Invalid branch name format: ${newBranchName}. Expected format: ${workType}-word1-word2[-word3]`,
+						stderr: `Invalid branch name format: ${newBranchName}. Expected format: ${workType}/word1-word2[-word3]`,
 					}),
 				);
 			}
@@ -1336,7 +1357,9 @@ Example:
 					}
 
 					// Prepend minimal work context - just one line to not interfere
-					const workContext = `> Worktree for **${workType}** work: ${description}\n\n`;
+					const workContext = `> Worktree for **${workType}** work: ${description}
+>
+> **Note:** Environment files (.env, .env.local, etc.) are symlinked from the main worktree.\n\n`;
 
 					const newContent = existingContent
 						? workContext + existingContent

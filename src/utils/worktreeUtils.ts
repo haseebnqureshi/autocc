@@ -63,12 +63,14 @@ export function generateWorktreeDirectory(
 	projectPath: string,
 	branchName: string,
 	pattern?: string,
+	baseBranch?: string,
 ): string {
 	// Default pattern if not specified
 	const defaultPattern = '../{branch}';
 	const activePattern = pattern || defaultPattern;
 
 	let sanitizedBranch: string | undefined;
+	let sanitizedBaseBranch: string | undefined;
 	let projectName: string | undefined;
 
 	const directory = activePattern.replace(/{(\w+)}/g, (placeholder, name) => {
@@ -81,6 +83,17 @@ export function generateWorktreeDirectory(
 					.replace(/[^a-zA-Z0-9-_.]+/g, '') // Remove special characters except dash, dot, underscore
 					.replace(/^-+|-+$/g, '') // Remove leading/trailing dashes
 					.toLowerCase(); // Convert to lowercase for consistency
+
+				// Prepend base branch if provided
+				if (baseBranch) {
+					sanitizedBaseBranch ??= baseBranch
+						.replace(/\//g, '-')
+						.replace(/[^a-zA-Z0-9-_.]+/g, '')
+						.replace(/^-+|-+$/g, '')
+						.toLowerCase();
+
+					return `${sanitizedBaseBranch}-${sanitizedBranch}`;
+				}
 
 				return sanitizedBranch;
 			case 'project':
@@ -122,7 +135,14 @@ export function prepareWorktreeItems(
 		const fullBranchName = wt.branch
 			? wt.branch.replace('refs/heads/', '')
 			: 'detached';
-		const branchName = truncateString(fullBranchName, MAX_BRANCH_NAME_LENGTH);
+
+		// Build display name with parent branch prefix if available
+		let displayName = fullBranchName;
+		if (wt.parentBranch && !wt.isMainWorktree) {
+			displayName = `${wt.parentBranch}/${fullBranchName}`;
+		}
+
+		const branchName = truncateString(displayName, MAX_BRANCH_NAME_LENGTH);
 		const isMain = wt.isMainWorktree ? ' (main)' : '';
 
 		// Check if worktree is newly created (within last 5 minutes)

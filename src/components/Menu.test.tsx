@@ -318,7 +318,7 @@ describe('Menu component rendering', () => {
 		// Count occurrences of the title
 		const titleCount = (
 			firstRenderOutput?.match(
-				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+				/AutoCC - Claude-Powered Worktrees for Stacked Velocity/g,
 			) || []
 		).length;
 		expect(titleCount).toBe(1);
@@ -340,7 +340,7 @@ describe('Menu component rendering', () => {
 		const secondRenderOutput = lastFrame2();
 		const titleCount2 = (
 			secondRenderOutput?.match(
-				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+				/AutoCC - Claude-Powered Worktrees for Stacked Velocity/g,
 			) || []
 		).length;
 		expect(titleCount2).toBe(1);
@@ -364,7 +364,7 @@ describe('Menu component rendering', () => {
 		// Check title appears only once
 		const titleMatches =
 			output?.match(
-				/autocc - Claude Code Worktree Manager \(fork of ccmanager\)/g,
+				/AutoCC - Claude-Powered Worktrees for Stacked Velocity/g,
 			) || [];
 		expect(titleMatches.length).toBe(1);
 

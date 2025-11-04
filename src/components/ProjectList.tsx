@@ -295,10 +295,43 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
 	return (
 		<Box flexDirection="column">
-			<Box marginBottom={1}>
+			<Box marginBottom={1} flexDirection="column">
 				<Text bold color="rgb(232, 123, 53)">
-					autocc - Multi-Project Mode (fork of ccmanager)
+					AutoCC - Claude-Powered Worktrees for Stacked Velocity
 				</Text>
+				<Box marginTop={0} flexDirection="column">
+					<Text dimColor>
+						• AI Branch Naming - Claude suggests semantic branch names from your
+						description
+					</Text>
+					<Text dimColor>
+						• Smart Organization - All worktrees in .autocc/ folder,
+						auto-updates .gitignore
+					</Text>
+					<Text dimColor>
+						• Auto Env Symlinking - .env files automatically symlinked from main
+						worktree
+					</Text>
+					<Text dimColor>
+						• Context Injection - Work description prepended to claude.md for
+						Claude
+					</Text>
+					<Text dimColor>
+						• Sectioned Menu - Organized by type
+						(Features/Hotfixes/Maintenance/Lab)
+					</Text>
+					<Text dimColor>
+						• Visual Indicators - [new] badges, session states, git status
+					</Text>
+					<Text dimColor>
+						• Progressive Questions - One question at a time, no cognitive
+						overload
+					</Text>
+					<Text dimColor>• Verbose Mode - Debug with --verbose flag</Text>
+				</Box>
+				<Box marginTop={1}>
+					<Text dimColor>Multi-Project Mode</Text>
+				</Box>
 			</Box>
 
 			<Box marginBottom={1}>

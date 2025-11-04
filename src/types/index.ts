@@ -19,6 +19,7 @@ export type StateDetectionStrategy =
 export interface Worktree {
 	path: string;
 	branch?: string;
+	parentBranch?: string;
 	isMainWorktree: boolean;
 	hasSession: boolean;
 	gitStatus?: GitStatus;
