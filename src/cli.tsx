@@ -97,7 +97,24 @@ const checkForUpdates = async () => {
 		const latestVersion = stdout.trim();
 		const currentVersion = cli.pkg.version;
 
-		if (latestVersion !== currentVersion) {
+		if (!currentVersion) return; // Skip if version cannot be determined
+
+		// Compare versions - only notify if latest is newer
+		const isNewer = (latest: string, current: string): boolean => {
+			const latestParts = latest.split('.').map(Number);
+			const currentParts = current.split('.').map(Number);
+
+			for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
+				const latestPart = latestParts[i] || 0;
+				const currentPart = currentParts[i] || 0;
+
+				if (latestPart > currentPart) return true;
+				if (latestPart < currentPart) return false;
+			}
+			return false;
+		};
+
+		if (isNewer(latestVersion, currentVersion)) {
 			// Show update message
 			console.error(
 				`\n\x1b[33m⚠ Update available: autocc@${latestVersion} (you have ${currentVersion})\x1b[0m`,
