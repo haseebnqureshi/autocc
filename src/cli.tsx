@@ -104,7 +104,11 @@ const checkForUpdates = async () => {
 			const latestParts = latest.split('.').map(Number);
 			const currentParts = current.split('.').map(Number);
 
-			for (let i = 0; i < Math.max(latestParts.length, currentParts.length); i++) {
+			for (
+				let i = 0;
+				i < Math.max(latestParts.length, currentParts.length);
+				i++
+			) {
 				const latestPart = latestParts[i] || 0;
 				const currentPart = currentParts[i] || 0;
 

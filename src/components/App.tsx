@@ -501,9 +501,23 @@ const App: React.FC<AppProps> = ({devcontainerConfig, multiProject}) => {
 
 		// Rename the worktree folder to match the branch name using git worktree move
 		// This updates git's internal references properly
+		// Import generateWorktreeDirectory for proper folder naming
+		const {generateWorktreeDirectory} = await import(
+			'../utils/worktreeUtils.js'
+		);
+
+		// Generate the final folder name using the same logic as initial creation
+		// This ensures flat structure: {baseBranch}-{sanitizedBranchName}
+		const finalFolderName = generateWorktreeDirectory(
+			projectRoot,
+			finalBranchName,
+			'{branch}',
+			baseBranch,
+		);
+
 		const finalWorktreePath = path.default.join(
 			path.default.dirname(worktreePath),
-			finalBranchName,
+			finalFolderName,
 		);
 
 		if (verbose) {
